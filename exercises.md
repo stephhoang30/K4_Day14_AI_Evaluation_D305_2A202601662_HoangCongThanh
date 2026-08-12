@@ -440,22 +440,80 @@ thay đổi Context Recall hay không.
 4. Rerank cùng tập chunks, không thêm hoặc xóa chunk.
 5. Tính lại hai metrics và giải thích kết quả.
 
+Reranker dùng `rerank_by_overlap()` đã implement trong `template.py`. Điểm cần
+quyết định trước khi chạy: **rerank theo cái gì?** Ở production chỉ có
+`question`, không có expected answer — nên rerank theo question mới là con số
+dùng được. Rerank theo expected answer là data leakage; bảng dưới báo cáo con số
+thật, còn biến thể leakage được nêu riêng như trần lý thuyết.
+
+Năm case chọn theo tiêu chí "còn chỗ để đổi": precision trước rerank chưa tuyệt
+đối, hoặc thứ tự chunk thực sự thay đổi sau rerank.
+
 | ID | Recall before | Recall after | Precision before | Precision after | Delta Precision |
 |---|---:|---:|---:|---:|---:|
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| **Avg** | | | | | |
+| M07 | 0.522 | 0.522 | 0.450 | 0.500 | **+0.050** |
+| H04 | 0.706 | 0.706 | 0.917 | 1.000 | **+0.083** |
+| M01 | 0.967 | 0.967 | 0.804 | 0.804 | 0.000 |
+| H05 | 0.405 | 0.405 | 0.887 | 0.887 | 0.000 |
+| A03 | 0.738 | 0.738 | 1.000 | 0.639 | **−0.361** |
+| **Avg** | **0.668** | **0.668** | **0.812** | **0.766** | **−0.046** |
+
+Trên toàn bộ 20 case: Recall giữ nguyên 0.743, Precision 0.887 → **0.876**
+(−0.011). Chỉ 2/20 case tăng, 1 case giảm mạnh, 17 case không đổi.
+
+Biến thể leakage (rerank theo expected answer) cho 0.887 → **0.950** (+0.063) —
+đây là **trần** của reranking lexical nếu biết trước đáp án, không phải kết quả
+dùng được.
+
+**Vì sao A03 giảm 0.361 — case đáng giá nhất của bài này**
+
+Câu hỏi A03 chứa premise sai: "three-year warranty covers liquid damage". Chunk
+`OT-06-P02` (warranty covers defects…) trùng **5 token với question** — cao
+nhất — nhưng chỉ phủ 0.10 expected answer nên không được tính là relevant. Rerank
+theo question đẩy nó lên rank 1, đá `OT-00-P02` (rule "không được approve claim",
+phủ 0.48 expected) xuống rank 2:
+
+```text
+before: OT-00-P02(rel) OT-06-P05(rel) OT-06-P01(rel) OT-06-P02      OT-01-P02
+after : OT-06-P02      OT-00-P02(rel) OT-06-P01(rel) OT-06-P05(rel) OT-01-P02
+```
+
+Bài học: **từ vựng của câu hỏi không phải từ vựng của câu trả lời.** Với câu
+false-premise, từ sai trong câu hỏi kéo đúng chunk sai lên đầu — reranker lexical
+làm hệ thống tệ đi.
 
 **Tại sao Recall dự kiến không đổi?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Vì Context Recall tính trên **union token của toàn bộ chunk**:
+> `|expected ∩ ⋃ chunk| / |expected|`. Rerank chỉ là một **hoán vị** của cùng tập
+> chunk — không thêm, không xóa — nên union bất biến, recall bất biến. Kết quả
+> thực nghiệm xác nhận đúng: **0/20 case thay đổi recall**, kể cả 10 case có thứ
+> tự đổi thật.
+>
+> Ngược lại, Context Precision là AP@K nên phụ thuộc hoàn toàn vào thứ hạng —
+> đó chính là lý do hai metric này phải đi cặp: recall trả lời "có lấy được
+> evidence không", precision trả lời "có đặt nó đủ sớm không".
 
 **Khi nào reranking không đủ và cần sửa retriever/query/chunking?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Ba tình huống, và run này dính cả ba:
+>
+> 1. **Recall đã thấp** — chunk đúng không nằm trong tập được lấy về. Reranking
+>    không tạo ra thứ không có. M06 (recall 0.268, 0/5 chunk từ `OT-08`), A01
+>    (0.200, 0/5 chunk từ `OT-00`), H05 (0.405, lấy sai đoạn của đúng document).
+>    Với nhóm này phải sửa `top_k`, query rewriting hoặc chunking; rerank vô ích.
+> 2. **Tín hiệu rank sai** — trường hợp A03 ở trên: overlap với question là tín
+>    hiệu nhiễu khi câu hỏi chứa premise sai hoặc dùng ngôn ngữ đời thường khác
+>    ngôn ngữ policy. Cần cross-encoder/semantic reranker chấm theo ngữ nghĩa
+>    question–chunk, không phải đếm từ chung.
+> 3. **Chunk quá nhỏ so với rule** — rule nằm rải trên hai đoạn liền nhau
+>    (`OT-08-P04` + `OT-08-P05`). Reranking đổi thứ tự vẫn không gộp được; phải
+>    sửa chunking hoặc dùng parent-document retrieval.
+>
+> Nói gọn: reranking chỉ đáng làm khi **recall đã cao mà precision thấp**. Trong
+> run này điều kiện đó gần như không xảy ra — các case precision thấp cũng chính
+> là các case recall thấp — nên đầu tư đúng phải là retrieval/query, không phải
+> reranker.
 
 ---
 
