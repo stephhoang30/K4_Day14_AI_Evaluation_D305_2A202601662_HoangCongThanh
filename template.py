@@ -546,6 +546,10 @@ class LLMJudge:
 #   - Triggers: mỗi code release, mỗi prompt change, trước demo/launch
 # ---------------------------------------------------------------------------
 
+# A metric average may drift by this much before it counts as a regression.
+REGRESSION_TOLERANCE = 0.05
+
+
 class BenchmarkRunner:
     """
     Runs a full evaluation benchmark.
@@ -568,10 +572,20 @@ class BenchmarkRunner:
         Returns:
             List of EvalResult, one per qa_pair.
         """
-        # TODO: for each pair, call agent_fn(pair.question), then run_full_eval.
-        # Pass pair.retrieved_contexts as the optional contexts argument and
-        # preserve the original pair on the returned EvalResult.
-        raise NotImplementedError("Implement BenchmarkRunner.run")
+        results: list[EvalResult] = []
+        for pair in qa_pairs:
+            answer = agent_fn(pair.question)
+            result = evaluator.run_full_eval(
+                answer=answer,
+                question=pair.question,
+                context=pair.context,
+                expected=pair.expected_answer,
+                contexts=pair.retrieved_contexts,
+            )
+            # Keep the caller's pair (with its id/metadata) on the result.
+            result.qa_pair = pair
+            results.append(result)
+        return results
 
     def generate_report(self, results: list[EvalResult]) -> dict[str, Any]:
         """
@@ -593,8 +607,34 @@ class BenchmarkRunner:
         Average only non-None retrieval scores. Return None for a retrieval
         average when no result contains that metric.
         """
-        # TODO
-        raise NotImplementedError("Implement generate_report")
+        total = len(results)
+        passed = sum(1 for r in results if r.passed)
+
+        failure_types: dict[str, int] = {}
+        for r in results:
+            if r.failure_type:
+                failure_types[r.failure_type] = failure_types.get(r.failure_type, 0) + 1
+
+        def average(values: list[float]) -> float:
+            return sum(values) / len(values) if values else 0.0
+
+        def retrieval_average(attr: str) -> float | None:
+            scores = [
+                getattr(r, attr) for r in results if getattr(r, attr) is not None
+            ]
+            return sum(scores) / len(scores) if scores else None
+
+        return {
+            "total": total,
+            "passed": passed,
+            "pass_rate": passed / total if total else 0.0,
+            "avg_faithfulness": average([r.faithfulness for r in results]),
+            "avg_relevance": average([r.relevance for r in results]),
+            "avg_completeness": average([r.completeness for r in results]),
+            "avg_context_recall": retrieval_average("context_recall"),
+            "avg_context_precision": retrieval_average("context_precision"),
+            "failure_types": failure_types,
+        }
 
     def run_regression(self, new_results: list, baseline_results: list) -> dict:
         """Compare new evaluation results against a baseline.
@@ -615,10 +655,24 @@ class BenchmarkRunner:
               - 'baseline_avg_completeness': float
               - 'regressions': list[str] — names of metrics that regressed
               - 'passed': bool — True if no regressions
-
-        TODO: Compute avg per metric, compare, list regressions, set passed flag
         """
-        raise NotImplementedError
+        def average(results: list, metric: str) -> float:
+            scores = [getattr(r, metric) for r in results]
+            return sum(scores) / len(scores) if scores else 0.0
+
+        report: dict[str, Any] = {}
+        regressions: list[str] = []
+        for metric in ("faithfulness", "relevance", "completeness"):
+            new_avg = average(new_results, metric)
+            baseline_avg = average(baseline_results, metric)
+            report[f"new_avg_{metric}"] = new_avg
+            report[f"baseline_avg_{metric}"] = baseline_avg
+            if baseline_avg - new_avg > REGRESSION_TOLERANCE:
+                regressions.append(metric)
+
+        report["regressions"] = regressions
+        report["passed"] = not regressions
+        return report
 
     def identify_failures(
         self,
@@ -635,8 +689,11 @@ class BenchmarkRunner:
         Returns:
             List of failing EvalResults.
         """
-        # TODO
-        raise NotImplementedError("Implement identify_failures")
+        return [
+            r
+            for r in results
+            if min(r.faithfulness, r.relevance, r.completeness) < threshold
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -670,8 +727,13 @@ class FailureAnalyzer:
             dict mapping failure_type → count.
             Example: {"hallucination": 3, "irrelevant": 2, "incomplete": 5}
         """
-        # TODO
-        raise NotImplementedError("Implement categorize_failures")
+        categories: dict[str, int] = {}
+        for failure in failures:
+            # An untyped failure still belongs in the clustering, otherwise the
+            # counts stop adding up to the number of failures.
+            label = failure.failure_type or "unknown"
+            categories[label] = categories.get(label, 0) + 1
+        return categories
 
     def find_root_cause(self, failure: EvalResult) -> str:
         """
@@ -683,8 +745,25 @@ class FailureAnalyzer:
             "Answer is missing key information — increase context window or improve generation"
             "Multiple issues detected — review full pipeline"
         """
-        # TODO: compare faithfulness, relevance, completeness, return appropriate string
-        raise NotImplementedError("Implement find_root_cause")
+        causes = {
+            "faithfulness": "Context is missing or irrelevant — improve retrieval",
+            "relevance": "Answer does not address the question — improve prompt clarity",
+            "completeness": (
+                "Answer is missing key information — increase context window "
+                "or improve generation"
+            ),
+        }
+        scores = {
+            "faithfulness": failure.faithfulness,
+            "relevance": failure.relevance,
+            "completeness": failure.completeness,
+        }
+        lowest = min(scores.values())
+        weakest = [metric for metric, score in scores.items() if score == lowest]
+        if len(weakest) > 1:
+            # No single metric stands out, so the fix is not a single component.
+            return "Multiple issues detected — review full pipeline"
+        return causes[weakest[0]]
 
     def generate_improvement_log(self, failures: list, suggestions: list[str]) -> str:
         """Generate a Markdown table logging failures and improvement actions.
@@ -700,10 +779,21 @@ class FailureAnalyzer:
 
         Returns:
             Markdown table string with a row per failure. Status is always "Open".
-
-        TODO: Build markdown table with failure details + matched suggestions
         """
-        raise NotImplementedError
+        rows = [
+            "| Failure ID | Type | Root Cause | Suggested Fix | Status |",
+            "|------------|------|------------|---------------|--------|",
+        ]
+        for index, failure in enumerate(failures, start=1):
+            fix = suggestions[index - 1] if index - 1 < len(suggestions) else "TBD"
+            rows.append(
+                f"| F{index:03d} "
+                f"| {failure.failure_type or 'unknown'} "
+                f"| {self.find_root_cause(failure)} "
+                f"| {fix} "
+                f"| Open |"
+            )
+        return "\n".join(rows)
 
     def generate_improvement_suggestions(
         self, failures: list[EvalResult]
@@ -721,8 +811,56 @@ class FailureAnalyzer:
         Returns:
             List of at least 3 suggestion strings (or fewer if failures is empty).
         """
-        # TODO: analyze categorized failures and return suggestions
-        raise NotImplementedError("Implement generate_improvement_suggestions")
+        if not failures:
+            return []
+
+        by_category = {
+            "hallucination": (
+                "Add a grounding check that rejects claims absent from the "
+                "retrieved context, and require a source citation per policy claim"
+            ),
+            "irrelevant": (
+                "Clarify the prompt and add intent routing so the agent answers "
+                "the policy that was actually asked about"
+            ),
+            "incomplete": (
+                "Increase retrieval top-k or chunk size and add few-shot examples "
+                "that spell out conditions and exceptions"
+            ),
+            "off_topic": (
+                "Tighten scope detection so out-of-domain questions get the "
+                "documented refusal instead of an improvised answer"
+            ),
+            "refusal": (
+                "Relax over-strict guardrails so in-scope questions are answered "
+                "instead of deflected"
+            ),
+            "unknown": (
+                "Review these failures manually — the scores did not map to a "
+                "single failure type"
+            ),
+        }
+
+        # Fix the biggest cluster first: one root cause usually covers many cases.
+        categories = self.categorize_failures(failures)
+        ordered = sorted(categories.items(), key=lambda item: item[1], reverse=True)
+        suggestions = [
+            by_category.get(label, by_category["unknown"]) for label, _ in ordered
+        ]
+
+        fallbacks = [
+            "Add the failing questions to the golden dataset so the fix is "
+            "verified by the next benchmark run",
+            "Wire the benchmark into CI as a quality gate that blocks deploys on "
+            "a metric drop over 0.05",
+            "Calibrate the LLM judge against human labels on the failing cases "
+            "before trusting the scores",
+        ]
+        for fallback in fallbacks:
+            if len(suggestions) >= 3:
+                break
+            suggestions.append(fallback)
+        return suggestions
 
 
 # ---------------------------------------------------------------------------
