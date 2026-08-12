@@ -1,0 +1,445 @@
+{
+  "judge_model": "gpt-4o-mini",
+  "cases": [
+    {
+      "id": "E01",
+      "lab_heuristic": {
+        "faithfulness": 0.9375,
+        "relevance": 0.5833333333333334,
+        "context_recall": 0.9642857142857143,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 0.6666666666666666,
+        "relevance": 0.739009852556912,
+        "context_recall": 1.0,
+        "context_precision": 0.9999999999
+      },
+      "deepeval": {
+        "faithfulness": 0.6666666666666666,
+        "relevance": 1.0,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "E02",
+      "lab_heuristic": {
+        "faithfulness": 0.6842105263157895,
+        "relevance": 0.7272727272727273,
+        "context_recall": 0.9259259259259259,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.8290652576163566,
+        "context_recall": 1.0,
+        "context_precision": 0.99999999995
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 1.0,
+        "context_recall": 0.75,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "E03",
+      "lab_heuristic": {
+        "faithfulness": 0.7692307692307693,
+        "relevance": 0.6,
+        "context_recall": 1.0,
+        "context_precision": 0.8875
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.8729712803540491,
+        "context_recall": 1.0,
+        "context_precision": 0.9999999999
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 0.4,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "E04",
+      "lab_heuristic": {
+        "faithfulness": 0.9090909090909091,
+        "relevance": 0.6,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.9759437531289333,
+        "context_recall": 1.0,
+        "context_precision": 0.7499999999625
+      },
+      "deepeval": {
+        "faithfulness": null,
+        "relevance": 1.0,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "E05",
+      "lab_heuristic": {
+        "faithfulness": 0.7037037037037037,
+        "relevance": 0.38461538461538464,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.7848285355870378,
+        "context_recall": 1.0,
+        "context_precision": 0.8333333332916666
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 1.0,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "M01",
+      "lab_heuristic": {
+        "faithfulness": 0.5555555555555556,
+        "relevance": 0.4375,
+        "context_recall": 0.9666666666666667,
+        "context_precision": 0.8041666666666667
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.8865564581045985,
+        "context_recall": 1.0,
+        "context_precision": 0.9999999999666667
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 1.0,
+        "context_recall": 1.0,
+        "context_precision": 0.8333333333333333
+      }
+    },
+    {
+      "id": "M02",
+      "lab_heuristic": {
+        "faithfulness": 0.6666666666666666,
+        "relevance": 0.9166666666666666,
+        "context_recall": 0.9333333333333333,
+        "context_precision": 0.8875
+      },
+      "ragas": {
+        "faithfulness": 0.75,
+        "relevance": 0.9238421356821812,
+        "context_recall": 1.0,
+        "context_precision": 0.99999999995
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 1.0,
+        "context_recall": 0.8,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "M03",
+      "lab_heuristic": {
+        "faithfulness": 0.8571428571428571,
+        "relevance": 0.26666666666666666,
+        "context_recall": 0.7368421052631579,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 0.8,
+        "relevance": 0.7219434363723679,
+        "context_recall": 0.6666666666666666,
+        "context_precision": 0.9999999999
+      },
+      "deepeval": {
+        "faithfulness": 0.6666666666666666,
+        "relevance": 1.0,
+        "context_recall": 0.6666666666666666,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "M04",
+      "lab_heuristic": {
+        "faithfulness": 0.6333333333333333,
+        "relevance": 0.5833333333333334,
+        "context_recall": 0.8260869565217391,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.7866173352666644,
+        "context_recall": 1.0,
+        "context_precision": 0.99999999998
+      },
+      "deepeval": {
+        "faithfulness": 0.6666666666666666,
+        "relevance": 1.0,
+        "context_recall": 0.8,
+        "context_precision": 0.7
+      }
+    },
+    {
+      "id": "M05",
+      "lab_heuristic": {
+        "faithfulness": 0.6086956521739131,
+        "relevance": 0.8,
+        "context_recall": 0.92,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.9725560404925094,
+        "context_recall": 1.0,
+        "context_precision": 0.99999999995
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 1.0,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "M06",
+      "lab_heuristic": {
+        "faithfulness": 0.18181818181818182,
+        "relevance": 0.75,
+        "context_recall": 0.2682926829268293,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 0.42857142857142855,
+        "relevance": 0.9278584517348897,
+        "context_recall": 0.6666666666666666,
+        "context_precision": 0.0
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 1.0,
+        "context_recall": 0.0,
+        "context_precision": 0.0
+      }
+    },
+    {
+      "id": "M07",
+      "lab_heuristic": {
+        "faithfulness": 0.32142857142857145,
+        "relevance": 0.3157894736842105,
+        "context_recall": 0.5217391304347826,
+        "context_precision": 0.45
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.0,
+        "context_recall": 0.3333333333333333,
+        "context_precision": 0.5333333333155555
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 0.6666666666666666,
+        "context_recall": 1.0,
+        "context_precision": 0.5
+      }
+    },
+    {
+      "id": "H01",
+      "lab_heuristic": {
+        "faithfulness": 0.5263157894736842,
+        "relevance": 0.47619047619047616,
+        "context_recall": 0.7727272727272727,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 0.6666666666666666,
+        "relevance": 0.6023374967548254,
+        "context_recall": 0.5,
+        "context_precision": 0.8666666666377778
+      },
+      "deepeval": {
+        "faithfulness": 0.3333333333333333,
+        "relevance": 1.0,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "H02",
+      "lab_heuristic": {
+        "faithfulness": 0.4166666666666667,
+        "relevance": 0.4444444444444444,
+        "context_recall": 0.5102040816326531,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 0.5,
+        "relevance": 0.0,
+        "context_recall": 0.6666666666666666,
+        "context_precision": 0.8055555555287036
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 0.75,
+        "context_recall": 0.2,
+        "context_precision": 0.3333333333333333
+      }
+    },
+    {
+      "id": "H03",
+      "lab_heuristic": {
+        "faithfulness": 0.5416666666666666,
+        "relevance": 0.38095238095238093,
+        "context_recall": 0.6,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 0.6666666666666666,
+        "relevance": 0.7091955157055332,
+        "context_recall": 0.6666666666666666,
+        "context_precision": 0.99999999998
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 1.0,
+        "context_recall": 1.0,
+        "context_precision": 0.9166666666666666
+      }
+    },
+    {
+      "id": "H04",
+      "lab_heuristic": {
+        "faithfulness": 0.6571428571428571,
+        "relevance": 0.42105263157894735,
+        "context_recall": 0.7058823529411765,
+        "context_precision": 0.9166666666666666
+      },
+      "ragas": {
+        "faithfulness": 0.7142857142857143,
+        "relevance": 0.5991323616610472,
+        "context_recall": 0.6666666666666666,
+        "context_precision": 0.999999999975
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 1.0,
+        "context_recall": 0.6666666666666666,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "H05",
+      "lab_heuristic": {
+        "faithfulness": 0.26666666666666666,
+        "relevance": 0.46153846153846156,
+        "context_recall": 0.40476190476190477,
+        "context_precision": 0.8875
+      },
+      "ragas": {
+        "faithfulness": 0.5,
+        "relevance": 0.7427960902658827,
+        "context_recall": 1.0,
+        "context_precision": 0.99999999998
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 0.0,
+        "context_recall": 0.75,
+        "context_precision": 0.0
+      }
+    },
+    {
+      "id": "A01",
+      "lab_heuristic": {
+        "faithfulness": 0.0,
+        "relevance": 0.36363636363636365,
+        "context_recall": 0.2,
+        "context_precision": 0.0
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.0,
+        "context_recall": 0.0,
+        "context_precision": 0.0
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 0.0,
+        "context_recall": 0.8888888888888888,
+        "context_precision": 0.0
+      }
+    },
+    {
+      "id": "A02",
+      "lab_heuristic": {
+        "faithfulness": 0.0,
+        "relevance": 0.0,
+        "context_recall": 0.8636363636363636,
+        "context_precision": 0.9166666666666666
+      },
+      "ragas": {
+        "faithfulness": 1.0,
+        "relevance": 0.0,
+        "context_recall": 0.75,
+        "context_precision": 0.99999999998
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 1.0,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "A03",
+      "lab_heuristic": {
+        "faithfulness": 0.4482758620689655,
+        "relevance": 0.5789473684210527,
+        "context_recall": 0.7380952380952381,
+        "context_precision": 1.0
+      },
+      "ragas": {
+        "faithfulness": 0.8,
+        "relevance": 0.0,
+        "context_recall": 0.5,
+        "context_precision": 0.999999999975
+      },
+      "deepeval": {
+        "faithfulness": 1.0,
+        "relevance": 0.5,
+        "context_recall": 1.0,
+        "context_precision": 1.0
+      }
+    }
+  ],
+  "averages": {
+    "lab_heuristic": {
+      "faithfulness": 0.5342555617572878,
+      "relevance": 0.5045969856167225,
+      "context_recall": 0.7429239864576378,
+      "context_precision": 0.8874999999999998
+    },
+    "ragas": {
+      "faithfulness": 0.824642857142857,
+      "relevance": 0.6037327000641894,
+      "context_recall": 0.7708333333333333,
+      "context_precision": 0.8394444444061435
+    },
+    "deepeval": {
+      "faithfulness": 0.9122807017543861,
+      "relevance": 0.8158333333333333,
+      "context_recall": 0.8261111111111111,
+      "context_precision": 0.7641666666666667
+    }
+  }
+}

@@ -415,19 +415,87 @@ verbosity bias và self-preference bằng cách nào?
 Chỉ làm sau khi hoàn thành 3.1–3.3. Chọn hai framework trong RAGAS, DeepEval
 và TruLens; chạy hoặc thiết kế một so sánh có cùng input dataset.
 
-| Tiêu chí | Framework 1: ____ | Framework 2: ____ |
+**Đây là so sánh chạy thật, không phải thiết kế trên giấy.** Script:
+`bonus_framework_comparison.py`, kết quả thô: `artifacts/framework_comparison.json`.
+Cả ba hệ chấm **cùng một input** lấy từ chính artifacts của lab — question,
+actual answer, 5 chunk đã retrieve (giữ nguyên thứ tự) và expected answer.
+Judge model `gpt-4o-mini` cho cả hai framework, bằng đúng model đã sinh answer.
+
+Dependency thêm, không nằm trong `requirements.txt`:
+`pip install ragas deepeval "langchain-community<0.4"`.
+
+| Tiêu chí | Framework 1: RAGAS 0.4.3 | Framework 2: DeepEval 4.1.7 |
 |---|---|---|
-| Setup complexity | | |
-| Metrics available | | |
-| CI/CD integration | | |
-| Kết quả trên cùng dataset | | |
-| Insight rút ra | | |
+| Setup complexity | Cài xong vẫn vỡ: `import ragas` báo `ModuleNotFoundError: No module named 'langchain_community.chat_models.vertexai'` vì ragas còn import đường dẫn đã bị xóa ở `langchain-community` 0.4.x — phải ghim `<0.4`. Cần **cả LLM lẫn embeddings** (`ResponseRelevancy` tính similarity trên embedding). Kéo theo toàn bộ hệ LangChain. | `import deepeval` chạy ngay sau `pip install`, không chỉnh gì. Chỉ cần `model="gpt-4o-mini"`, gọi thẳng OpenAI SDK, không cần embeddings. |
+| Metrics available | `Faithfulness`, `ResponseRelevancy`, `LLMContextRecall`, `LLMContextPrecisionWithReference`, cùng `ContextEntityRecall` và các biến thể `NonLLM*` chấm không cần LLM. Map 1–1 với 5 metric của lab. | `FaithfulnessMetric`, `AnswerRelevancyMetric`, `ContextualRecall/Precision/RelevancyMetric`, cộng `GEval` để tự định nghĩa rubric. Mỗi metric có `threshold`, trả `.score`, `.reason`, `.success`. |
+| CI/CD integration | `evaluate()` trả về DataFrame — hợp cho batch report offline; muốn chặn deploy phải tự viết assertion trên aggregate. | pytest-native: `assert_test()` với threshold sẵn trên từng metric, nên cắm vào CI ít code hơn hẳn. Đây là điểm mạnh rõ rệt của DeepEval. |
+| Kết quả trên cùng dataset | Faithfulness **0.825** · Relevance **0.604** · Recall **0.771** · Precision **0.839** | Faithfulness **0.912** · Relevance **0.816** · Recall **0.826** · Precision **0.764** |
+| Insight rút ra | Bắt đúng chỗ heuristic của lab mù: M06 Context Precision = **0.000** (lab cho 1.000). Nhưng phạt `relevance = 0.000` cho mọi câu từ chối (A01, A02, A03, H02) do cơ chế phát hiện "noncommittal answer" — nên RAGAS cũng **không** dùng thẳng được cho slice adversarial. | Rộng tay nhất ở answer-side nhưng **chặt nhất ở retrieval** (precision 0.764 — thấp nhất ba hệ). Chấm A02 = 1.000 ở cả bốn metric: nó nhận ra câu từ chối là hành vi đúng chứ không phải answer rỗng. |
+
+Baseline để so: heuristic của lab — Faithfulness 0.534 · Relevance 0.505 ·
+Recall 0.743 · Precision 0.887.
+
+Ghi chú trung thực: 1/80 lần chấm của DeepEval fail (`E04` faithfulness,
+`RetryError`/timeout khi gọi API). Case đó ghi `n/a` và bị loại khỏi average,
+không thay bằng giá trị đoán.
 
 - Scores có nhất quán không?
 - Framework nào strict hơn và vì sao?
 - Hai framework có tìm ra cùng failure cases không?
 
 > *Phân tích:*
+>
+> **Nhất quán ở thứ hạng, lệch rất mạnh ở giá trị tuyệt đối.** Answer-side xếp
+> hạng đều một chiều: lab 0.534 < RAGAS 0.825 < DeepEval 0.912. Chênh 0.38 giữa
+> lab và DeepEval trên cùng một câu trả lời — nếu ai đó đặt gate "faithfulness ≥
+> 0.7" mà không nói rõ đo bằng framework nào thì con số đó vô nghĩa. Bài học vận
+> hành: **threshold luôn phải gắn với công cụ đo và version của nó**.
+>
+> Ở retrieval thì thứ tự **đảo chiều**: Context Precision lab 0.887 > RAGAS
+> 0.839 > DeepEval 0.764. Nên không có framework nào "strict" một cách tổng quát.
+>
+> **Framework nào strict hơn — tùy trục, và lý do rất cụ thể.** Lab strictest ở
+> answer-side vì nó đếm token trùng, nên paraphrase bị phạt; RAGAS và DeepEval
+> tách answer thành claim rồi kiểm entailment, nên diễn đạt khác mà đúng ý vẫn
+> được điểm. Ở Context Precision thì ngược lại: heuristic của lab chỉ cần chunk
+> phủ ≥ 10% token expected là gọi "relevant", còn hai framework hỏi LLM "chunk
+> này có thực sự được dùng để trả lời không" nên gắt hơn nhiều.
+>
+> Chiều strict cũng không đơn điệu ở cấp case: E01 lab cho faithfulness 0.938
+> trong khi **cả hai** framework chỉ 0.667 — LLM judge phát hiện một claim không
+> được context hỗ trợ mà word-overlap không nhìn thấy. Tức là heuristic không
+> phải "luôn khắt khe hơn", nó chỉ khắt khe **nhầm chỗ**.
+>
+> **Failure cases: trùng phần lớn, và hai chỗ lệch đều đáng giá.** Bottom-5 theo
+> trung bình bốn metric:
+>
+> | Hệ | Bottom-5 |
+> |---|---|
+> | Lab heuristic | A01, M07, A02, H05, M06 |
+> | RAGAS | A01, M07, H02, M06, A03 |
+> | DeepEval | H05, A01, M06, H02, M07 |
+>
+> Ba case **A01, M06, M07** có mặt ở bottom-5 của cả ba hệ — đây là failure thật,
+> không phải artifact của một cách đo. H02 bị cả hai framework LLM đánh dấu nhưng
+> lab thì không.
+>
+> Bất đồng lớn nhất là **A02**: lab xếp áp chót (0.445) còn DeepEval xếp **top-3**
+> (1.000 cả bốn metric). Cả RAGAS lẫn DeepEval đều cho faithfulness = 1.000 cho
+> câu "I'm unable to assist with that", vì nó không chứa claim nào không được
+> support. Đây là **bằng chứng độc lập** cho kết luận ở Exercise 3.2 và
+> `reflection.md`: A02 là metric artifact, không phải hallucination.
+>
+> Chỗ lệch thứ hai quan trọng theo chiều ngược lại: **M06 Context Precision** —
+> lab 1.000, RAGAS 0.000, DeepEval 0.000. Cả hai framework bắt đúng cái mà AP@K
+> với ngưỡng 0.1 bỏ sót. Nếu chỉ đọc con số của lab thì sẽ kết luận nhầm rằng
+> retrieval của M06 hoàn hảo, trong khi thực tế nó lấy 0/5 chunk từ đúng
+> document.
+>
+> **Kết luận chọn công cụ cho OrbitTech:** DeepEval cho CI (assert_test có
+> threshold sẵn, setup không vỡ, và nó chấm đúng hành vi refusal). RAGAS cho báo
+> cáo offline định kỳ nhờ bộ retrieval metric chi tiết hơn — nhưng phải **loại
+> slice adversarial khỏi `ResponseRelevancy`**, vì cơ chế noncommittal của nó cho
+> 0.000 với mọi câu từ chối đúng.
 
 ### Exercise 3.5 — Retrieval Reranking (Bonus +5)
 
