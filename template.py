@@ -25,6 +25,7 @@ The reranking helper is an optional bonus exercise and may remain unimplemented.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -384,9 +385,12 @@ class LLMJudge:
     Uses an LLM to score AI responses according to a rubric.
     """
 
+    # A judge that scores the first response higher than the rest by more than
+    # this margin is treated as positionally biased.
+    POSITION_BIAS_MARGIN = 0.1
+
     def __init__(self, judge_llm_fn: Callable[[str], str]) -> None:
-        # TODO: store judge_llm_fn
-        pass
+        self.judge_llm_fn = judge_llm_fn
 
     def score_response(
         self,
@@ -418,8 +422,73 @@ class LLMJudge:
                 "reasoning": str,               # raw LLM explanation
             }
         """
-        # TODO
-        raise NotImplementedError("Implement score_response")
+        criteria = "\n".join(f"- {name}: {desc}" for name, desc in rubric.items())
+        prompt = (
+            "You are an impartial evaluator. Score the answer below against "
+            "every criterion.\n\n"
+            f"QUESTION:\n{question}\n\n"
+            f"ANSWER:\n{answer}\n\n"
+            f"CRITERIA:\n{criteria}\n\n"
+            "Judge content only. Length is not a criterion: a short answer "
+            "that states the correct rule scores the same as a long one.\n"
+            "Respond with ONLY a JSON object mapping each criterion name to a "
+            'score between 0.0 and 1.0, e.g. {"accuracy": 0.8}.'
+        )
+        raw_response = self.judge_llm_fn(prompt)
+        return {
+            "scores": self._parse_scores(raw_response, rubric),
+            "reasoning": raw_response if isinstance(raw_response, str) else str(raw_response),
+        }
+
+    def _parse_scores(self, raw_response: Any, rubric: dict[str, Any]) -> dict[str, float]:
+        """Extract criterion → score (0-1) from a judge response.
+
+        Any criterion the judge did not score — including the case where the
+        response holds no usable JSON at all — falls back to 0.5.
+        """
+        parsed = self._extract_json_object(raw_response)
+        # Accept both a flat {"accuracy": 0.8} and a wrapped {"scores": {...}}.
+        if isinstance(parsed.get("scores"), dict):
+            parsed = parsed["scores"]
+
+        scores: dict[str, float] = {}
+        for name in rubric:
+            try:
+                scores[name] = self._normalize_score(parsed[name])
+            except (KeyError, TypeError, ValueError):
+                scores[name] = 0.5
+        return scores
+
+    @staticmethod
+    def _extract_json_object(raw_response: Any) -> dict[str, Any]:
+        """Parse the response as JSON, tolerating prose or code fences around
+        it. Returns an empty dict when nothing parseable is found."""
+        if not isinstance(raw_response, str):
+            return {}
+        candidates = [raw_response]
+        match = re.search(r"\{.*\}", raw_response, re.DOTALL)
+        if match:
+            candidates.append(match.group(0))
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate)
+            except ValueError:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+        return {}
+
+    @staticmethod
+    def _normalize_score(value: Any) -> float:
+        """Coerce a judge score to [0.0, 1.0].
+
+        A value above 1.0 is read as the lecture's 1-5 rubric scale and mapped
+        onto 0-1 (5 → 1.0, 3 → 0.5, 1 → 0.0).
+        """
+        score = float(value)
+        if score > 1.0:
+            score = (score - 1.0) / 4.0
+        return _clamp01(score)
 
     def detect_bias(self, scores_batch: list[dict[str, Any]]) -> dict[str, Any]:
         """
@@ -440,8 +509,31 @@ class LLMJudge:
                 "severity_bias":   bool,
             }
         """
-        # TODO
-        raise NotImplementedError("Implement detect_bias")
+        def mean_of(entries: list[dict[str, Any]]) -> float | None:
+            values = [
+                score
+                for entry in entries
+                for score in (entry.get("scores") or {}).values()
+            ]
+            return sum(values) / len(values) if values else None
+
+        overall = mean_of(scores_batch)
+
+        # Positional bias needs something to compare the first entry against,
+        # so a batch of one is reported as unbiased rather than guessed at.
+        first_mean = mean_of(scores_batch[:1])
+        rest_mean = mean_of(scores_batch[1:])
+        positional_bias = (
+            first_mean is not None
+            and rest_mean is not None
+            and first_mean - rest_mean > self.POSITION_BIAS_MARGIN
+        )
+
+        return {
+            "positional_bias": positional_bias,
+            "leniency_bias": overall is not None and overall > 0.8,
+            "severity_bias": overall is not None and overall < 0.3,
+        }
 
 
 # ---------------------------------------------------------------------------
