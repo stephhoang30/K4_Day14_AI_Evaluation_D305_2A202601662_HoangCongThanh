@@ -30,11 +30,11 @@ critical.
 
 | Metric | Acceptable Low Score Scenario | Critical Low Score Scenario | Action Required |
 |---|---|---|---|
-| Faithfulness | | | |
-| Answer Relevance | | | |
-| Context Recall | | | |
-| Context Precision | | | |
-| Completeness | | | |
+| Faithfulness | Answer paraphrase lại context bằng từ khác, hoặc là refusal đúng cho câu out-of-scope (A-cases) — answer ít token trùng context nên heuristic overlap chấm thấp dù answer vẫn grounded. | Answer nêu con số/điều kiện chính sách không có trong context: "restocking fee 5%", "bảo hành 3 năm", "hoàn tiền trong 24h". Customer hành động theo policy bịa → rủi ro tài chính và pháp lý. | Critical: block deploy. Bắt mọi claim có số/ngày phải cite `doc_id`, thêm grounding check trước khi trả lời, đối chiếu lại retrieval của case đó. |
+| Answer Relevance | Question dài, nhiều narrative ("mình mua laptop tháng trước cho con gái và...") nhưng answer đúng lại ngắn gọn → overlap với question thấp một cách hợp lý. | Answer trả lời sang policy khác với policy được hỏi: hỏi return window nhưng trả lời warranty. User nhận hướng dẫn sai mà vẫn tưởng đúng. | Critical: sửa intent routing và prompt, bắt answer restate câu hỏi trước khi trả lời, thêm few-shot cho direct answering. |
+| Context Recall | Expected answer chứa câu chữ tổng hợp/boilerplate không nằm nguyên văn trong chunk, hoặc câu multi-doc mà một doc đã đủ cho claim chính. | Retriever bỏ sót đúng doc chứa rule quyết định — ví dụ ngoại lệ hygiene accessories trong `OT-05` hoặc rule effective_date trong `OT-09`. Generator không thể trả lời đúng dù prompt tốt tới đâu. | Critical: sửa retrieval trước, không sửa prompt. Xem lại chunking, tăng top-k, query rewriting/expansion, hybrid search; thêm test coverage theo `doc_id`. |
+| Context Precision | Recall cao và answer đúng, chunk relevant chỉ đứng thứ 3 thay vì thứ 1. Chi phí là token và latency, không phải correctness. | Chunk relevant rơi xuống dưới cutoff của generator, hoặc chunk của policy version cũ (`status: superseded`) xếp trên bản `current` → answer grounded vào version sai. | Cao: thêm reranker (Exercise 3.5), tinh chỉnh k, filter chunk theo `status`/`effective_date` trước khi đưa vào prompt. |
+| Completeness | Expected answer viết dài kèm lý do và citation, answer ngắn nhưng đã nêu đúng fact quyết định → denominator bị thổi lên làm score thấp. | Answer bỏ mất điều kiện/ngoại lệ làm đổi quyết định của customer: nói "trả hàng trong 30 ngày" mà không nói phải *unopened*, còn opened chỉ 14 ngày và mất 10% restocking fee. Nửa sự thật nguy hiểm hơn từ chối trả lời. | Cao: đưa checklist bắt buộc (điều kiện, ngoại lệ, effective date) vào prompt, tăng context window/top-k, few-shot bằng answer đầy đủ điều kiện. |
 
 ### Exercise 1.2 — Bias trong LLM-as-a-Judge
 
@@ -46,15 +46,67 @@ Ba bias thường gặp:
 
 **Câu 1: Thiết kế experiment phát hiện position bias với ít nhất hai conditions.**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Dùng **counterbalanced design** trên cùng một tập cặp answer.
+> Lấy N = 50 câu hỏi OrbitTech, mỗi câu có hai answer A và B (A từ RAG hiện tại,
+> B từ prompt variant). Giữ cố định judge model, rubric, temperature = 0.
+>
+> - **Condition 1:** trình bày theo thứ tự (A, B).
+> - **Condition 2:** trình bày đúng cặp đó theo thứ tự (B, A).
+> - **Condition 3 (control):** trình bày (A, A) — hai answer giống hệt nhau.
+>
+> Đo ba đại lượng:
+>
+> 1. `win_rate_position_1` trong mỗi condition. Judge không bias thì tổng win
+>    rate của A ở Condition 1 và Condition 2 phải xấp xỉ nhau; nếu slot đầu
+>    thắng ở cả hai condition thì bias nằm ở vị trí, không nằm ở nội dung.
+> 2. **Flip rate:** tỉ lệ cặp đổi verdict khi đảo thứ tự. Flip rate cao =
+>    verdict phụ thuộc vị trí chứ không phụ thuộc chất lượng.
+> 3. Condition 3 là bằng chứng sạch nhất: hai answer y hệt nhau nên mọi kết quả
+>    khác "tie" đều là position bias thuần túy.
+>
+> Kiểm định bằng McNemar test trên các cặp flip, báo cáo p-value và CI. Nếu có
+> bias, fix bằng cách chấm điểm từng answer độc lập theo thang tuyệt đối 1–5
+> thay vì so sánh cặp, hoặc lấy trung bình score của hai thứ tự.
 
 **Câu 2: Làm thế nào giảm verbosity bias bằng rubric design?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Thiết kế rubric sao cho điểm gắn với **nội dung bắt buộc**, không
+> gắn với ấn tượng tổng thể:
+>
+> - Với mỗi câu hỏi, định nghĩa trước một **checklist required facts** (ví dụ câu
+>   return: window 30 ngày unopened, 14 ngày opened, 10% restocking fee, ngoại lệ
+>   defective). Judge phải **liệt kê fact nào có/không có trước**, rồi mới cho
+>   điểm. Extract-then-score cắt phần lớn đường tắt "dài = kỹ".
+> - Ghi thẳng vào rubric: *"Độ dài không phải tiêu chí. Answer nêu đủ rule và
+>   ngoại lệ trong hai câu phải được điểm bằng answer mười câu cùng nội dung."*
+> - Thêm một dimension đối trọng kiểu precision — **unsupported claims** — trừ
+>   điểm cho mỗi claim không có trong context. Answer dài mà độn thông tin không
+>   grounded sẽ bị phạt, nên dài không còn miễn phí.
+> - Tách dimension nhỏ và chấm riêng (correctness, completeness, evidence,
+>   safety) thay vì một điểm tổng; điểm tổng là nơi verbosity bias trốn.
+> - Kiểm chứng: chạy cùng nội dung answer ở hai phiên bản ngắn/dài (thêm câu
+>   khách sáo, không thêm fact). Chênh lệch điểm giữa hai phiên bản chính là
+>   verbosity bias còn lại.
 
 **Câu 3: Tại sao cần calibrate LLM judge với human labels?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Judge score chỉ là **proxy metric**; nếu không đối chiếu với
+> human label thì không biết "4/5" của judge có nghĩa gì đối với chuyên gia
+> domain.
+>
+> - **Đo agreement:** chấm human trên một stratified subset (khoảng 20–30 case,
+>   trải đủ Easy/Medium/Hard/Adversarial), tính Cohen's kappa hoặc Spearman
+>   correlation giữa judge và human. Agreement thấp nghĩa là mọi kết luận rút ra
+>   từ judge đều không tin được.
+> - **Đặt threshold có căn cứ:** CI/CD chặn deploy theo một con số cụ thể. Chỉ
+>   calibration mới cho biết ngưỡng 0.7 tương ứng "chấp nhận được" hay đã lọt
+>   answer sai chính sách.
+> - **Bắt lỗi domain judge không tự thấy:** dùng sai policy version, thiếu điều
+>   kiện effective date, hoặc hứa exception mà `OT-00` cấm — judge dễ chấm cao vì
+>   answer nghe trôi chảy.
+> - **Phát hiện drift:** khi đổi judge model hoặc provider cập nhật model, điểm
+>   có thể dịch chuyển trong khi hệ thống không đổi. Bộ human label giữ vai trò
+>   mốc cố định để so sánh giữa các lần chạy.
 
 ### Exercise 1.3 — Evaluation trong CI/CD
 
@@ -62,13 +114,40 @@ Ba bias thường gặp:
 
 | Metric | Threshold | Lý do |
 |---|---:|---|
-| Faithfulness | | |
-| Answer Relevance | | |
-| Completeness | | |
+| Faithfulness | 0.70 | Theo bài giảng, agent có faithfulness < 0.7 không được deploy. Với customer support, hallucination là failure đắt nhất: customer hành động theo điều khoản refund/warranty bịa ra. Đây là **hard gate**, không cho override bằng lý do "chỉ thấp một chút". |
+| Answer Relevance | 0.65 | Answer lệch chủ đề vẫn có thể được user sửa bằng follow-up nên chi phí thấp hơn hallucination, nhưng dưới 0.65 nghĩa là intent routing sai có hệ thống chứ không phải nhiễu từng case. |
+| Completeness | 0.60 | Expected answer trong lab viết đầy đủ điều kiện và ngoại lệ nên heuristic overlap luôn chấm thấp hơn thực tế; 0.60 đúng biên "significant issues" của bài giảng. Vùng 0.60–0.70 vẫn deploy được nhưng phải mở ticket theo dõi. |
+
+Gate chỉ pass khi đủ **cả ba** điều kiện, không chỉ ngưỡng tuyệt đối:
+
+1. Cả ba average metric đạt threshold ở trên trên toàn bộ 20 case golden set.
+2. Không metric nào giảm quá 0.05 so với baseline (regression rule của Task 4).
+3. Không case adversarial nào bị `failure_type = "hallucination"` — 3/3 phải từ
+   chối hoặc nêu đúng giới hạn scope. Đây là gate nhị phân, không lấy trung bình.
 
 **Câu 2: Khi nào dùng offline evaluation, online evaluation và human review?**
 
 > *Câu trả lời:*
+>
+> - **Offline** — chạy trong CI trên golden set 20 QA, ở mỗi PR, mỗi lần đổi
+>   prompt, đổi model, đổi tham số retrieval và mỗi lần cập nhật corpus. Ưu điểm
+>   là lặp lại được, so sánh được giữa các lần chạy và đủ nhanh/rẻ để chặn merge.
+>   Điểm mù: chỉ đo được đúng những gì golden set đã bao phủ.
+> - **Online** — sau khi deploy, đo trên real traffic: thumbs up/down, escalation
+>   rate sang human agent, tỉ lệ hỏi lại cùng chủ đề, latency và cost mỗi
+>   conversation. Dùng để phát hiện distribution shift, tức là câu hỏi thật lệch
+>   khỏi golden set (mùa khuyến mãi, sản phẩm mới, policy vừa đổi effective date).
+>   Chạy liên tục, sample log để chấm tự động, alert theo tuần.
+> - **Human review** — dùng cho phần high-stakes và cho calibration, không dùng
+>   đại trà vì đắt: các case từ chối bảo hành/hoàn tiền, case privacy và
+>   security, case prompt injection, cộng thêm một stratified sample định kỳ để
+>   calibrate LLM judge (Exercise 1.2 câu 3). Cũng là trọng tài khi offline metric
+>   nói pass nhưng user feedback online nói fail.
+>
+> Ba lớp này bổ sung nhau: offline chặn regression trước khi ra production, online
+> phát hiện vấn đề mà golden set chưa nghĩ tới, human review định nghĩa "đúng" để
+> hai lớp tự động kia bám theo. Case mới phát hiện từ online và human review được
+> đưa ngược vào golden set — đúng vòng Evaluate → Analyze → Improve → Augment.
 
 ---
 
